@@ -1,0 +1,62 @@
+name: Release Pipeline
+
+on:
+  release:
+    types: [published] 
+
+
+jobs:
+  generate-openapi:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          python3 -m pip install --upgrade pip 
+        
+      - name: Docker-compose download
+        run: |
+          sudo apt-get update
+          sudo apt-get install docker-compose-plugin
+
+      - name: Docker UP
+        run: |
+          docker compose up -d
+
+      - name: Check container logs
+        run: |
+          docker compose logs backend
+
+      - name: Wait for server to be ready
+        run: |
+          until curl -s http://localhost:8000/openapi.json > /dev/null; do
+            echo "Waiting for server to start..."
+            sleep 60
+          done
+
+      - name: Run FastAPI server and fetch OpenAPI schema
+        run: |
+          curl -s http://localhost:8000/openapi.json -o openapi.json
+
+      - name: Upload OpenAPI schema to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./openapi.json
+          asset_name: openapi.json
+          asset_content_type: application/json
