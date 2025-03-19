@@ -49,7 +49,7 @@ jobs:
 
       - name: Run FastAPI server and fetch OpenAPI schema
         run: |
-          curl -s http://localhost:8000/openapi.json -o openapi.json
+          curl -v -X GET "http://localhost:8000/api/v1/utils/" -H "Accept: application/json" -o openapi.json
 
       - name: Upload OpenAPI schema to release
         uses: actions/upload-release-asset@v1
